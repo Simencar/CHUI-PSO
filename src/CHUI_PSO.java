@@ -15,7 +15,7 @@ public class CHUI_PSO {
     private HashSet<BitSet> explored = new HashSet<>();
     private HashMap<Integer, Integer> itemNamesRev = new HashMap<>();
     private int shortestTransactionID;
-    private int avgDiff;
+    private int std;
     private boolean avgEstimate;
     private int lowEst = 0;
     private int highEst = 0;
@@ -25,17 +25,17 @@ public class CHUI_PSO {
 
 
     //file paths
-    final String dataset = "accidents";
+    final String dataset = "kosarak";
     final String dataPath = "D:\\Documents\\Skole\\Master\\Work\\"+dataset+".txt"; //input file path
     final String resultPath = "D:\\Documents\\Skole\\Master\\Work\\out.txt"; //output file path
     final String convPath = "D:\\Documents\\Skole\\Master\\Experiments\\"+dataset+"\\";
 
     //Algorithm parameters
     final int pop_size = 20; // the size of the population
-    final int iterations = 10000; // the number of iterations
-    final int minUtil = 29000000; // minimum utility threshold
+    final int iterations = 10000; // the number of iterations before termination
+    final int minUtil = 4000000; // minimum utility threshold
     final boolean closed = true; //true = find CHUIS, false = find HUIS
-    final boolean prune = true; //true = extended pruning, false = traditional pruning
+    final boolean prune = true; //true = ETP, false = traditional TWU-Model
 
     //stats
     double maxMemory = 0; // the maximum memory usage
@@ -110,75 +110,68 @@ public class CHUI_PSO {
 
         readData(); //reads input file and prunes DB
 
-        System.out.println("db size: " + database.size());
-        System.out.println("twu size: " + items.size());
-        System.out.println("trans: " + maxTransactionLength);
-        System.out.println(totalUtil);
-
         checkMemory();
 
-        //variables used after each population update
-        List<Double> percentChui = new ArrayList<>(); //roulette probabilities for current CHUIs
-        int nPatterns = 0; // number of patterns discovered last iteration
+        //utilities used after each population update
+        List<Double> probChui = new ArrayList<>(); //roulette probabilities for current discovered CHUIs
+        int nPatterns = 0; // number of CHUIs discovered last iteration
         int pos = 0; //position of gBest in percentChui
         int lastImproved = 0; //the number of iterations since a CHUI was discovered
         boolean roulette = true; // roulette wheel selection
 
-        //calculate average utility of each item and find the average difference between them all
-        avgDiff = 0;
+        //calculate average utility of each item and find the standard deviation between avgUtil & maxUtil
+        std = 0; // the standard deviation
         for (Item item : items) {
             item.avgUtil = 1 + (item.totalUtil / item.TIDS.cardinality());
-            avgDiff += item.maxUtil - item.avgUtil;
+            std += item.maxUtil - item.avgUtil;
         }
 
         if (!items.isEmpty()) {
-            avgDiff = avgDiff / items.size();
-            System.out.println("avg_diff: " + avgDiff);
-            //if the proportion of the average difference to the minUtil is too large,
-            // then use maximum utilities for fitness estimates
-            avgEstimate = (double) avgDiff / minUtil < 0.0001;
-            if(avgEstimate) {
-                System.out.println("avg_est");
-            }
-            else {
-                System.out.println("max_est");
-            }
-            generatePop(); //initialize the population
+            std = std / items.size();
+            //only use avgEstimates if the standard deviation is small compared to the minUtil
+            avgEstimate = (double) std / minUtil < 0.0001;
+            //initialize the population
+            generatePop();
             for (int i = 0; i < iterations; i++) {
-                update(); //update each particle in population
+                //update each particle in population
+                update();
+
                 //gBest update strategy
                 if (chuis.size() > 1) {
+                    //SELECT GBEST WITH RWS
                     if (roulette) {
                         if (nPatterns != chuis.size()) { //new CHUIs discovered
-                            percentChui = roulettePercentChui(); //recalculate roulette probabilities
+                            probChui = rouletteProbChui(); //recalculate roulette probability ranges
                             lastImproved = 0;
                         } else {
                             lastImproved++;
                             if (lastImproved > 50) {
-                                roulette = false; //convergence has slowed, disable roulette wheel selection
+                                roulette = false; //starting to converge, disable RWS
                             }
                         }
-                        pos = rouletteSelect(percentChui); //select gBest
-                    } else { //select gBest with different approach
+                        pos = rouletteSelect(probChui); //select gBest with RWS
+                    }
+                    //SELECT GBEST AS NEXT CHUI IN 'chuis'
+                    else {
                         if (nPatterns == chuis.size()) { //only change gBest if no CHUIs discovered last iteration
                             if (pos < chuis.size() - 1) {
                                 pos++;
                             } else {
-                                pos = 0;
+                                pos = 0; //end of list reached, start at front again
                             }
                         }
                     }
                     gBest = new Particle(chuis.get(pos).X, chuis.get(pos).fitness); //update gBest
                 }
                 if(nPatterns != chuis.size()) {
-                    it.add(i);
-                    pat.add(chuis.size());
+                    //it.add(i);
+                    //pat.add(chuis.size());
                     System.out.println("iteration: " + i + " CHUIs: " + chuis.size());
                 }
 
-                if (i % 100 == 0 && highEst > 0) { //check each 100th iteration
-                    //Tighten avgDiff if mostly overestimates are made (only relevant when avgEstimates is active)
-                    avgDiff = ((double) lowEst / highEst < 0.01) ? 1 : avgDiff;
+                if (i % 100 == 0 && highEst > 0 && i > 0) { //check each 100th iteration
+                    //Tighten std if mostly overestimates are made (only relevant when avgEstimates is active)
+                    std = ((double) lowEst / highEst < 0.01) ? 1 : std;
                 }
                 nPatterns = chuis.size();
             }
@@ -191,7 +184,7 @@ public class CHUI_PSO {
 
 
     private void generatePop() { //TODO: can be more effective when creating already explored particles.
-        List<Double> rouletteProbabilities = roulettePercent();
+        List<Double> rouletteProbabilities = rouletteProbabilities();
         population = new Particle[pop_size];
         pBest = new Particle[pop_size];
         for (int i = 0; i < pop_size; i++) {
@@ -209,15 +202,16 @@ public class CHUI_PSO {
                     j++;
                 }
             }
-            BitSet transactionBitset = pev_check(p); //transactions the particle occur
-            p.fitness = calcFitness(p, transactionBitset, -1);
+            BitSet tidSet = pev_check(p); //transactions the particle occur
+            p.fitness = calcFitness(p, tidSet, -1);
             population[i] = p;
             pBest[i] = new Particle(p.X, p.fitness); //initialize pBest
             if (!explored.contains(p.X)) {
                 //check if HUI/CHUI
                 if (p.fitness >= minUtil) {
                     if (closed) {
-                        if (isClosed(p, shortestTransactionID, transactionBitset)) {
+                        //check if particle is closed
+                        if (isClosed(p, shortestTransactionID, tidSet)) {
                             chuis.add(new Particle(p.X, p.fitness));
                         }
                     } else {
@@ -237,6 +231,12 @@ public class CHUI_PSO {
         }
     }
 
+    /**
+     * The pev-check verifies that the particle exists in the database and modifies it if not.
+     * Furthermore, it calculates the avg/max fitness estimate and returns the TIDSET of the particle.
+     * @param p The particle
+     * @return orgBitSet: The transactions the itemset of the particle occur
+     */
     private BitSet pev_check(Particle p) {
         int item1 = p.X.nextSetBit(0);
         if (item1 == -1) {
@@ -252,7 +252,7 @@ public class CHUI_PSO {
                 copyBitSet = (BitSet) orgBitSet.clone();
                 p.estFitness += avgEstimate ? (items.get(i - 1).avgUtil) : (items.get(i - 1).maxUtil);
             } else {
-                // no common transactions
+                // no common transactions, remove the current item from the particle
                 orgBitSet = (BitSet) copyBitSet.clone();
                 p.X.clear(i);
             }
@@ -260,14 +260,24 @@ public class CHUI_PSO {
         return orgBitSet;
     }
 
-    private boolean isClosed(Particle p, int shortestTransaction, BitSet Tids) {
-        int support = Tids.cardinality();
-        List<Pair> lTrans = database.get(shortestTransaction);
-        for (Pair pair : lTrans) {
+    /**
+     * Verifies the closure of a particle
+     * @param p The particle
+     * @param shortestTransaction The ID of the shortest transaction the particle occur, Stored during fitness calc
+     * @param tidSet the TIDSET of the particle
+     * @return True if Closed, false otherwise
+     */
+    private boolean isClosed(Particle p, int shortestTransaction, BitSet tidSet) {
+        int support = tidSet.cardinality();
+        List<Pair> sTrans = database.get(shortestTransaction);
+        //Loop all items in the shortest transaction
+        for (Pair pair : sTrans) {
+            //The item does not appear in the particle
             if (!p.X.get(pair.item)) {
-                BitSet currentTids = (BitSet) Tids.clone();
+                BitSet currentTids = (BitSet) tidSet.clone();
                 BitSet newItem = (BitSet) items.get(pair.item - 1).TIDS.clone();
                 currentTids.and(newItem);
+                //The support of the particle is the same with the new item appended -> The particle is not closed
                 if (currentTids.cardinality() == support) {
                     return false;
                 }
@@ -276,38 +286,42 @@ public class CHUI_PSO {
         return true;
     }
 
-    private int calcFitness(Particle p, BitSet transactionBitset, int idx) {
+    /**
+     * Calculates the fitness of a particle
+     * @param p The particle
+     * @param tidSet TidSet of the particle
+     * @param idx The position of the particle in the population (to reference pBest), set to -1 if first population
+     * @return The fitness of the particle
+     */
+    private int calcFitness(Particle p, BitSet tidSet, int idx) {
         int fitness = 0;
-        int min = maxTransactionLength;
-        if (transactionBitset == null) {
-            return 0;
+        int min = maxTransactionLength; //used to find the shortest transaction
+        if (tidSet == null) {
+            return 0; // particle does not occur in any transaction
         }
 
+        //The particle only contains 1 item, return the fitness calculated during pre-processing
         if (p.X.cardinality() == 1) {
             return items.get(p.X.nextSetBit(0) - 1).totalUtil;
         }
-        //TODO: rewrite
-        //estimate the fitness and determine if is worth calculating exact fitness
-        int support = transactionBitset.cardinality();
+
+        //estimate the fitness
+        int support = tidSet.cardinality();
         int est = p.estFitness * support;
-        //delta is used to account for wobble in the estimate
-        double delta = minUtil - (avgDiff * support);
-        delta = (delta < 0) ? 0 : delta;
-        //only use delta if avgEstimate is used. Using max utility values ensures est >= fitness
-        delta = avgEstimate ? (delta / minUtil) : 1;
-        if (idx != -1) {
-            //don't calculate fitness if estimate is unpromising
-            if (est < minUtil * delta && est < pBest[idx].fitness) {
+        int buffer = avgEstimate ? (std * support) : 0;
+        if(idx != -1) {
+            if (est+buffer < minUtil && est < pBest[idx].fitness) {
+                // Skip fitness calculation
                 return 0;
             }
         }
 
         //calculate exact fitness
-        for (int i = transactionBitset.nextSetBit(0); i != -1; i = transactionBitset.nextSetBit(i + 1)) {
+        for (int i = tidSet.nextSetBit(0); i != -1; i = tidSet.nextSetBit(i + 1)) {
             int q = 0; //current index in transaction
             int item = p.X.nextSetBit(0);
             if (database.get(i).size() < min) {
-                shortestTransactionID = i; //TODO: Better to store a set with each item that does not occur in P
+                shortestTransactionID = i;
             }
             while (item != -1) {
                 if (database.get(i).get(q).item == item) {
@@ -318,7 +332,8 @@ public class CHUI_PSO {
             }
         }
 
-        if (est < fitness) {
+        //Update overestimates and underestimates
+        if (est+buffer < fitness) {
             lowEst++;
         } else {
             highEst++;
@@ -387,7 +402,7 @@ public class CHUI_PSO {
     }
 
     /**
-     *  Flips a random number of bits in current particle, only bits that a different to pBest/gBest are considered
+     *  Flips a random number of bits in current particle, only bits that are opposite to pBest/gBest are considered
      * @param diffList bit differences between particle and pBest/gBest
      * @param pos position of current particle in population
      */
@@ -424,11 +439,10 @@ public class CHUI_PSO {
 
     /**
      * Creates a list of probabilities for roulette wheel selection based on item TWU-values
-     *
-     * @return
+     * @return List of probability ranges
      */
-    private List<Double> roulettePercent() {
-        List<Double> percents = new ArrayList<>();
+    private List<Double> rouletteProbabilities() {
+        List<Double> probRange = new ArrayList<>();
         double twuSum = 0;
         double tempSum = 0;
         //sum the twu values for all 1-HTWUIs
@@ -436,30 +450,29 @@ public class CHUI_PSO {
             int item = items.get(i).item;
             twuSum += itemTWU.get(item);
         }
-        //Calculate the proportional probabilities
+        //Set probabilities based on TWU-proportion
         for (int i = 0; i < items.size(); i++) {
             int item = items.get(i).item;
             tempSum += itemTWU.get(item);
             double percent = tempSum / twuSum;
-            percents.add(percent);
+            probRange.add(percent);
         }
-        return percents;
+        return probRange;
     }
 
     /**
-     * Select the
-     *
-     * @param percents list of roulette percentages
+     * Select an item based on the Roulette wheel probabilities
+     * @param probRange list of probability ranges for each item
      * @return
      */
-    private int rouletteSelect(List<Double> percents) {
+    private int rouletteSelect(List<Double> probRange) {
         double rand = Math.random();
-        if (rand <= percents.get(0)) {
+        if (rand <= probRange.get(0)) {
             return 0;
         }
         int pos = 0;
-        for (int i = 1; i < percents.size(); i++) {
-            if (rand > percents.get(i - 1) && rand <= percents.get(i)) {
+        for (int i = 1; i < probRange.size(); i++) {
+            if (rand > probRange.get(i - 1) && rand <= probRange.get(i)) {
                 pos = i;
                 break;
             }
@@ -467,7 +480,7 @@ public class CHUI_PSO {
         return pos;
     }
 
-    private List<Double> roulettePercentChui() {
+    private List<Double> rouletteProbChui() {
         double sum = 0;
         double tempSum = 0;
         List<Double> percentsChui = new ArrayList<>();
@@ -484,9 +497,7 @@ public class CHUI_PSO {
 
 
     /**
-     * Reads transactions from input file and removes items that are not 1-HTWUIs
-     * if prune=true: extended pruning will be initialized
-     * if prune=false: DB is revised, optimized and returned in 'database' list
+     * Reads DB from input file and initializes the pruning strategies + transaction optimizations
      */
     private void readData() {
         Map<Integer, Integer> itemTWU1 = new HashMap<>(); //holds current TWU-value for each item
@@ -536,7 +547,7 @@ public class CHUI_PSO {
             db.add(revisedTransaction); //store revised transaction
         }
         if (prune) {
-            prune(db, transUtils); //extended pruning
+            ETP(db, transUtils); //Use additional pruning with ETP
         } else {
             optimizeTransactions(db, itemTWU1);
         }
@@ -544,9 +555,53 @@ public class CHUI_PSO {
     }
 
     /**
-     * Sets item-names in the range 1 - #candidate-items, removes empty transactions,
+     * Recursively calculates item-TWUs, removes 1-LTWUI and updates TUs, until no items are removed.
+     * @param db         The database to prune
+     * @param transUtils The current transaction utilities of the database
+     */
+    private void ETP(List<List<Pair>> db, List<Integer> transUtils) {//TODO: make iterative
+        List<List<Pair>> revisedDB = new ArrayList<>();
+        Map<Integer, Integer> itemTWU1 = new HashMap<>();
+        boolean pruned = false;
+        //calculate TWU of each item
+        for (int i = 0; i < db.size(); i++) {
+            int transactionUtility = transUtils.get(i);
+            for (int j = 0; j < db.get(i).size(); j++) {
+                int item = db.get(i).get(j).item;
+                Integer twu = itemTWU1.get(item);
+                twu = (twu == null) ? transactionUtility : twu + transactionUtility;
+                itemTWU1.put(item, twu);
+            }
+        }
+        //check if any item has TWU < minUtil
+        for (int i = 0; i < db.size(); i++) {
+            List<Pair> revisedTransaction = new ArrayList<>();
+            for (int j = 0; j < db.get(i).size(); j++) {
+                int item = db.get(i).get(j).item;
+                int twu = itemTWU1.get(item);
+                if (twu >= minUtil) {
+                    revisedTransaction.add(db.get(i).get(j)); //add item to revised transaction
+                } else { // item is 1-LTWUI
+                    pruned = true;
+                    int TU = transUtils.get(i);
+                    TU -= db.get(i).get(j).utility;
+                    transUtils.set(i, TU); //update transaction utility
+                }
+            }
+            revisedDB.add(revisedTransaction); //store the revised transaction
+        }
+        if (pruned) { //item was removed, repeat pruning
+            ETP(revisedDB, transUtils);
+        }
+        else { //pruning is finished, optimize DB
+            optimizeTransactions(revisedDB, itemTWU1);
+        }
+    }
+
+    /**
+     * Sets item-names in the range 1 - #1-HTWUI, removes empty transactions,
      * and initializes values required for the fitness- calculation and estimate approach
-     * Can significantly reduce memory usage and execution time with certain datasets
+     * The revised db is stored in 'database'
      * @param db The database to optimize
      */
     private void optimizeTransactions(List<List<Pair>> db, Map<Integer, Integer> itemTWU1) {
@@ -584,50 +639,7 @@ public class CHUI_PSO {
         }
     }
 
-    /**
-     * Recursively calculates item-TWUs, prune unpromising items, and update TUs, until no items are removed.
-     * @param db         The database to prune
-     * @param transUtils The current transaction utilities of the database
-     */
-    private void prune(List<List<Pair>> db, List<Integer> transUtils) {//TODO: make iterative
 
-        List<List<Pair>> revisedDB = new ArrayList<>();
-        Map<Integer, Integer> itemTWU1 = new HashMap<>();
-        boolean pruned = false;
-        //calculate TWU of each item
-        for (int i = 0; i < db.size(); i++) {
-            int transactionUtility = transUtils.get(i);
-            for (int j = 0; j < db.get(i).size(); j++) {
-                int item = db.get(i).get(j).item;
-                Integer twu = itemTWU1.get(item);
-                twu = (twu == null) ? transactionUtility : twu + transactionUtility;
-                itemTWU1.put(item, twu);
-            }
-        }
-        //check if any item has TWU < minUtil
-        for (int i = 0; i < db.size(); i++) {
-            List<Pair> revisedTransaction = new ArrayList<>();
-            for (int j = 0; j < db.get(i).size(); j++) {
-                int item = db.get(i).get(j).item;
-                int twu = itemTWU1.get(item);
-                if (twu >= minUtil) {
-                    revisedTransaction.add(db.get(i).get(j)); //add item to revised transaction
-                } else { // item is not 1-HTWUI
-                    pruned = true;
-                    int TU = transUtils.get(i);
-                    TU -= db.get(i).get(j).utility;
-                    transUtils.set(i, TU); //update transaction utility
-                }
-            }
-            revisedDB.add(revisedTransaction); //store the revised transaction
-        }
-        if (pruned) { //item was removed, prune again
-            prune(revisedDB, transUtils);
-        }
-        else { //pruning is finished, optimize DB
-            optimizeTransactions(revisedDB, itemTWU1);
-        }
-    }
 
 
     private void writeOut() throws IOException {
