@@ -19,16 +19,15 @@ public class CHUI_PSO {
     private boolean avgEstimate;
     private int lowEst = 0;
     private int highEst = 0;
-    ArrayList<Integer> it = new ArrayList<>();
-    ArrayList<Integer> pat = new ArrayList<>();
-
+    //ArrayList<Integer> it = new ArrayList<>();
+    //ArrayList<Integer> pat = new ArrayList<>();
 
 
     //file paths
     final String dataset = "kosarak";
-    final String dataPath = "D:\\Documents\\Skole\\Master\\Work\\"+dataset+".txt"; //input file path
+    final String dataPath = "D:\\Documents\\Skole\\Master\\Work\\" + dataset + ".txt"; //input file path
     final String resultPath = "D:\\Documents\\Skole\\Master\\Work\\out.txt"; //output file path
-    final String convPath = "D:\\Documents\\Skole\\Master\\Experiments\\"+dataset+"\\";
+    final String convPath = "D:\\Documents\\Skole\\Master\\Experiments\\" + dataset + "\\";
 
     //Algorithm parameters
     final int pop_size = 20; // the size of the population
@@ -102,6 +101,8 @@ public class CHUI_PSO {
 
 
     /**
+     * Call this method to run the algorithm. File paths and algorithm parameters must be set in top of this class
+     *
      * @throws IOException
      */
     public void run() throws IOException {
@@ -163,7 +164,7 @@ public class CHUI_PSO {
                     }
                     gBest = new Particle(chuis.get(pos).X, chuis.get(pos).fitness); //update gBest
                 }
-                if(nPatterns != chuis.size()) {
+                if (nPatterns != chuis.size()) {
                     //it.add(i);
                     //pat.add(chuis.size());
                     System.out.println("iteration: " + i + " CHUIs: " + chuis.size());
@@ -233,9 +234,10 @@ public class CHUI_PSO {
 
     /**
      * The pev-check verifies that the particle exists in the database and modifies it if not.
-     * Furthermore, it calculates the avg/max fitness estimate and returns the TIDSET of the particle.
+     * Furthermore, it calculates the avg/max fitness estimate and returns the TidSet of the particle.
+     *
      * @param p The particle
-     * @return orgBitSet: The transactions the itemset of the particle occur
+     * @return orgBitSet: The transactions the itemset of the particle occur (TidSet)
      */
     private BitSet pev_check(Particle p) {
         int item1 = p.X.nextSetBit(0);
@@ -262,9 +264,10 @@ public class CHUI_PSO {
 
     /**
      * Verifies the closure of a particle
-     * @param p The particle
+     *
+     * @param p                   The particle
      * @param shortestTransaction The ID of the shortest transaction the particle occur, Stored during fitness calc
-     * @param tidSet the TIDSET of the particle
+     * @param tidSet              the TIDSET of the particle
      * @return True if Closed, false otherwise
      */
     private boolean isClosed(Particle p, int shortestTransaction, BitSet tidSet) {
@@ -288,9 +291,10 @@ public class CHUI_PSO {
 
     /**
      * Calculates the fitness of a particle
-     * @param p The particle
+     *
+     * @param p      The particle
      * @param tidSet TidSet of the particle
-     * @param idx The position of the particle in the population (to reference pBest), set to -1 if first population
+     * @param idx    The position of the particle in the population (to reference pBest), set to -1 if first population
      * @return The fitness of the particle
      */
     private int calcFitness(Particle p, BitSet tidSet, int idx) {
@@ -309,8 +313,8 @@ public class CHUI_PSO {
         int support = tidSet.cardinality();
         int est = p.estFitness * support;
         int buffer = avgEstimate ? (std * support) : 0;
-        if(idx != -1) {
-            if (est+buffer < minUtil && est < pBest[idx].fitness) {
+        if (idx != -1) {
+            if (est + buffer < minUtil && est < pBest[idx].fitness) {
                 // Skip fitness calculation
                 return 0;
             }
@@ -333,7 +337,7 @@ public class CHUI_PSO {
         }
 
         //Update overestimates and underestimates
-        if (est+buffer < fitness) {
+        if (est + buffer < fitness) {
             lowEst++;
         } else {
             highEst++;
@@ -369,11 +373,11 @@ public class CHUI_PSO {
             if (!explored.contains(p.X)) {
                 //bitset before pev
                 BitSet copy1 = (BitSet) p.X.clone();
-                BitSet transactionBitset = pev_check(p);
+                BitSet tidSet = pev_check(p);
 
                 //check if explored again because pev_check can change the particle
                 if (!explored.contains(p.X)) {
-                    p.fitness = calcFitness(p, transactionBitset, i);
+                    p.fitness = calcFitness(p, tidSet, i);
                     //update pBest and gBest
                     if (p.fitness > pBest[i].fitness) {
                         pBest[i] = new Particle(p.X, p.fitness);
@@ -383,7 +387,7 @@ public class CHUI_PSO {
                     }
                     if (p.fitness >= minUtil) {
                         if (closed) {
-                            if (isClosed(p, shortestTransactionID, transactionBitset)) {
+                            if (isClosed(p, shortestTransactionID, tidSet)) {
                                 //Particle is CHUI
                                 chuis.add(new Particle(p.X, p.fitness));
                             }
@@ -402,9 +406,10 @@ public class CHUI_PSO {
     }
 
     /**
-     *  Flips a random number of bits in current particle, only bits that are opposite to pBest/gBest are considered
+     * Flips a random number of bits in current particle, only bits that are opposite to pBest/gBest are considered
+     *
      * @param diffList bit differences between particle and pBest/gBest
-     * @param pos position of current particle in population
+     * @param pos      position of current particle in population
      */
     private void changeParticle(List<Integer> diffList, int pos) {
         //number of items so change
@@ -421,8 +426,9 @@ public class CHUI_PSO {
 
     /**
      * Computes the bit difference between current particle and pBest/gBest
+     *
      * @param best pBest/gBest
-     * @param p the current particle
+     * @param p    the current particle
      * @return List containing the different bit positions
      */
     private List<Integer> bitDiff(Particle best, Particle p) {
@@ -436,9 +442,9 @@ public class CHUI_PSO {
     }
 
 
-
     /**
      * Creates a list of probabilities for roulette wheel selection based on item TWU-values
+     *
      * @return List of probability ranges
      */
     private List<Double> rouletteProbabilities() {
@@ -462,6 +468,7 @@ public class CHUI_PSO {
 
     /**
      * Select an item based on the Roulette wheel probabilities
+     *
      * @param probRange list of probability ranges for each item
      * @return
      */
@@ -556,6 +563,7 @@ public class CHUI_PSO {
 
     /**
      * Recursively calculates item-TWUs, removes 1-LTWUI and updates TUs, until no items are removed.
+     *
      * @param db         The database to prune
      * @param transUtils The current transaction utilities of the database
      */
@@ -592,8 +600,7 @@ public class CHUI_PSO {
         }
         if (pruned) { //item was removed, repeat pruning
             ETP(revisedDB, transUtils);
-        }
-        else { //pruning is finished, optimize DB
+        } else { //pruning is finished, optimize DB
             optimizeTransactions(revisedDB, itemTWU1);
         }
     }
@@ -602,6 +609,7 @@ public class CHUI_PSO {
      * Sets item-names in the range 1 - #1-HTWUI, removes empty transactions,
      * and initializes values required for the fitness- calculation and estimate approach
      * The revised db is stored in 'database'
+     *
      * @param db The database to optimize
      */
     private void optimizeTransactions(List<List<Pair>> db, Map<Integer, Integer> itemTWU1) {
@@ -640,8 +648,6 @@ public class CHUI_PSO {
     }
 
 
-
-
     private void writeOut() throws IOException {
         StringBuilder sb = new StringBuilder();
         for (Particle p : chuis) {
@@ -659,33 +665,34 @@ public class CHUI_PSO {
         w.close();
     }
 
+    /*
     private void writeRes() throws IOException {
         StringBuilder sb = new StringBuilder();
         String p;
-        if(prune) {
+        if (prune) {
             p = "_PRUNE";
-        }
-        else {
+        } else {
             p = "_NOPRUNE";
         }
-        for(int i = 0; i < it.size(); i++) {
+        for (int i = 0; i < it.size(); i++) {
             sb.append(it.get(i));
             sb.append(",");
             sb.append(pat.get(i));
             sb.append(System.lineSeparator());
         }
-        BufferedWriter w = new BufferedWriter(new FileWriter(convPath+"convergence"+p+".csv"));
+        BufferedWriter w = new BufferedWriter(new FileWriter(convPath + "convergence" + p + ".csv"));
         w.write(sb.toString());
         w.newLine();
         w.close();
 
         sb = new StringBuilder();
-        sb.append(minUtil + "," + (minUtil * 1.0 / totalUtil)  + "," + chuis.size() +"," +(endTimestamp - startTimestamp)+ "," + (int) maxMemory);
-        BufferedWriter s = new BufferedWriter(new FileWriter(convPath+"log_"+p+".csv", true));
+        sb.append(minUtil + "," + (minUtil * 1.0 / totalUtil) + "," + chuis.size() + "," + (endTimestamp - startTimestamp) + "," + (int) maxMemory);
+        BufferedWriter s = new BufferedWriter(new FileWriter(convPath + "log_" + p + ".csv", true));
         s.write(sb.toString());
         s.newLine();
         s.close();
     }
+     */
 
     /**
      * Print statistics about the latest execution to System.out.
