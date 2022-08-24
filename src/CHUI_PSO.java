@@ -21,15 +21,14 @@ public class CHUI_PSO {
     private int highEst = 0; //overestimates
 
 
-
     //file paths
-    final String input = "D:\\Documents\\Skole\\Master\\Work\\chess.txt"; //input file path
+    final String input = "D:\\Documents\\Skole\\Master\\Work\\kosarak.txt"; //input file path
     final String output = "D:\\Documents\\Skole\\Master\\Work\\out.txt"; //output file path
 
     //Algorithm parameters
     final int pop_size = 20; // the size of the population
     final int iterations = 10000; // the number of iterations before termination
-    final int minUtil = 600000; // minimum utility threshold
+    final int minUtil = 6000000; // minimum utility threshold
     final boolean closed = true; //true = find CHUIS, false = find HUIS
     final boolean prune = true; //true = ETP, false = traditional TWU-Model
 
@@ -50,7 +49,6 @@ public class CHUI_PSO {
             this.utility = utility;
         }
 
-        @Override
         public int compareTo(Pair o) {
             return (this.item < o.item) ? -1 : 1;
         }
@@ -68,7 +66,6 @@ public class CHUI_PSO {
             this.item = item;
         }
 
-        @Override
         public String toString() {
             return String.valueOf(item);
         }
@@ -89,11 +86,9 @@ public class CHUI_PSO {
             this.fitness = fitness;
         }
 
-        @Override
         public String toString() {
             return X.toString();
         }
-
     }
 
 
@@ -108,7 +103,6 @@ public class CHUI_PSO {
 
         readData(); //reads input file and prunes DB
         checkMemory();
-
 
         //utilities used after each population update
         List<Double> probChui = new ArrayList<>(); //roulette probabilities for current discovered CHUIs
@@ -257,8 +251,8 @@ public class CHUI_PSO {
     /**
      * Verifies the closure of a particle
      *
-     * @param p                   The particle
-     * @param tidSet              the TIDSET of the particle
+     * @param p      The particle
+     * @param tidSet the TIDSET of the particle
      * @return True if Closed, false otherwise
      */
     private boolean isClosed(Particle p, BitSet tidSet) {
@@ -429,7 +423,6 @@ public class CHUI_PSO {
         return diffList;
     }
 
-
     /**
      * Creates a list of probabilities for roulette wheel selection based on item TWU-values
      *
@@ -477,6 +470,7 @@ public class CHUI_PSO {
 
     /**
      * creates roulette probabilities from current CHUIs
+     *
      * @return list of probabilities for each CHUI
      */
     private List<Double> rouletteProbChui() {
@@ -493,7 +487,6 @@ public class CHUI_PSO {
         }
         return percentsChui;
     }
-
 
     /**
      * Reads DB from input file and initializes the pruning strategies + transaction optimizations
@@ -550,7 +543,6 @@ public class CHUI_PSO {
         } else {
             optimizeTransactions(db, itemTWU1);
         }
-
     }
 
     /**
@@ -639,9 +631,9 @@ public class CHUI_PSO {
         }
     }
 
-
     /**
      * Writes results to file output file
+     *
      * @throws IOException
      */
     private void writeOut() throws IOException {
