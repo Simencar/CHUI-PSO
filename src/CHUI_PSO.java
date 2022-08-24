@@ -4,35 +4,33 @@ import java.util.*;
 
 public class CHUI_PSO {
 
-    private Map<Integer, Integer> itemTWU = new HashMap<>();
-    private List<List<Pair>> database = new ArrayList<>();
-    private Particle gBest;
-    private Particle[] pBest;
-    private Particle[] population;
-    private int maxTransactionLength = 0;
-    private ArrayList<Item> items = new ArrayList<>();
-    private List<Particle> chuis = new ArrayList<>();
-    private HashSet<BitSet> explored = new HashSet<>();
-    private HashMap<Integer, Integer> itemNamesRev = new HashMap<>();
-    private int shortestTransactionID;
-    private int std;
-    private boolean avgEstimate;
-    private int lowEst = 0;
-    private int highEst = 0;
-    //ArrayList<Integer> it = new ArrayList<>();
-    //ArrayList<Integer> pat = new ArrayList<>();
+    private Map<Integer, Integer> itemTWU = new HashMap<>(); //map of item TWUs
+    private List<List<Pair>> database = new ArrayList<>(); //the pruned database
+    private Particle gBest; //global fittest particle
+    private Particle[] pBest; //list of fittest particle offspring
+    private Particle[] population; //the particle population
+    private int maxTransactionLength = 0; //longest transaction length in database
+    private ArrayList<Item> items = new ArrayList<>(); //the 1-HTWUI
+    private List<Particle> chuis = new ArrayList<>(); //solution-set
+    private HashSet<BitSet> explored = new HashSet<>(); //set of explored particles
+    private HashMap<Integer, Integer> itemNamesRev = new HashMap<>(); //reference to old original item names
+    private int shortestTransactionID; //The shortest transaction of the current particle
+    private int std; //the mean deviation between avg- and max utilities
+    private boolean avgEstimate; //boolean that decides the type of estimate
+    private int lowEst = 0; //underestimates
+    private int highEst = 0; //overestimates
+
 
 
     //file paths
-    final String dataset = "kosarak";
-    final String dataPath = "D:\\Documents\\Skole\\Master\\Work\\" + dataset + ".txt"; //input file path
-    final String resultPath = "D:\\Documents\\Skole\\Master\\Work\\out.txt"; //output file path
-    final String convPath = "D:\\Documents\\Skole\\Master\\Experiments\\" + dataset + "\\";
+    final String dataset = "retail";
+    final String input = "D:\\Documents\\Skole\\Master\\Work\\" + dataset + ".txt"; //input file path
+    final String output = "D:\\Documents\\Skole\\Master\\Work\\out.txt"; //output file path
 
     //Algorithm parameters
     final int pop_size = 20; // the size of the population
     final int iterations = 10000; // the number of iterations before termination
-    final int minUtil = 4000000; // minimum utility threshold
+    final int minUtil = 5000; // minimum utility threshold
     final boolean closed = true; //true = find CHUIS, false = find HUIS
     final boolean prune = true; //true = ETP, false = traditional TWU-Model
 
@@ -61,7 +59,7 @@ public class CHUI_PSO {
 
     private static class Item {
         int item; //item-name
-        BitSet TIDS; //TID set
+        BitSet TIDS; //TidSet
         int totalUtil = 0; //utility of the item
         int avgUtil; // average utility of item
         int maxUtil = 0; // maximum utility of item
@@ -110,8 +108,8 @@ public class CHUI_PSO {
         startTimestamp = System.currentTimeMillis();
 
         readData(); //reads input file and prunes DB
-
         checkMemory();
+
 
         //utilities used after each population update
         List<Double> probChui = new ArrayList<>(); //roulette probabilities for current discovered CHUIs
@@ -120,29 +118,29 @@ public class CHUI_PSO {
         int lastImproved = 0; //the number of iterations since a CHUI was discovered
         boolean roulette = true; // roulette wheel selection
 
-        //calculate average utility of each item and find the standard deviation between avgUtil & maxUtil
+        //calculate average utility of each item and find the deviation between avgUtil & maxUtil
         std = 0; // the standard deviation
         for (Item item : items) {
             item.avgUtil = 1 + (item.totalUtil / item.TIDS.cardinality());
             std += item.maxUtil - item.avgUtil;
         }
 
+        explored.add(new BitSet(items.size())); //avoids edge-case for empty particle
         if (!items.isEmpty()) {
-            std = std / items.size();
+            std = std / items.size(); //find mean deviation
             //only use avgEstimates if the standard deviation is small compared to the minUtil
             avgEstimate = (double) std / minUtil < 0.0001;
-            //initialize the population
-            generatePop();
+            generatePop(); //initialize the population
             for (int i = 0; i < iterations; i++) {
-                //update each particle in population
+                //update and evaluate each particle in population
                 update();
 
                 //gBest update strategy
                 if (chuis.size() > 1) {
                     //SELECT GBEST WITH RWS
                     if (roulette) {
-                        if (nPatterns != chuis.size()) { //new CHUIs discovered
-                            probChui = rouletteProbChui(); //recalculate roulette probability ranges
+                        if (nPatterns != chuis.size()) { //new CHUIs discovered, roulette probs must be updated
+                            probChui = rouletteProbChui();
                             lastImproved = 0;
                         } else {
                             lastImproved++;
@@ -164,11 +162,7 @@ public class CHUI_PSO {
                     }
                     gBest = new Particle(chuis.get(pos).X, chuis.get(pos).fitness); //update gBest
                 }
-                if (nPatterns != chuis.size()) {
-                    //it.add(i);
-                    //pat.add(chuis.size());
-                    System.out.println("iteration: " + i + " CHUIs: " + chuis.size());
-                }
+
 
                 if (i % 100 == 0 && highEst > 0 && i > 0) { //check each 100th iteration
                     //Tighten std if mostly overestimates are made (only relevant when avgEstimates is active)
@@ -180,11 +174,13 @@ public class CHUI_PSO {
         endTimestamp = System.currentTimeMillis();
         checkMemory();
         writeOut();
-        //writeRes();
     }
 
 
-    private void generatePop() { //TODO: can be more effective when creating already explored particles.
+    /**
+     * Generates pop_size particles with roulette wheel selection based on item TWUs
+     */
+    private void generatePop() {
         List<Double> rouletteProbabilities = rouletteProbabilities();
         population = new Particle[pop_size];
         pBest = new Particle[pop_size];
@@ -212,7 +208,7 @@ public class CHUI_PSO {
                 if (p.fitness >= minUtil) {
                     if (closed) {
                         //check if particle is closed
-                        if (isClosed(p, shortestTransactionID, tidSet)) {
+                        if (isClosed(p, tidSet)) {
                             chuis.add(new Particle(p.X, p.fitness));
                         }
                     } else {
@@ -241,9 +237,6 @@ public class CHUI_PSO {
      */
     private BitSet pev_check(Particle p) {
         int item1 = p.X.nextSetBit(0);
-        if (item1 == -1) {
-            return null; //TODO: create new particle?? and why does this seem to always happen once
-        }
         BitSet orgBitSet = (BitSet) items.get(item1 - 1).TIDS.clone();
         BitSet copyBitSet = (BitSet) orgBitSet.clone();
         p.estFitness = avgEstimate ? items.get(item1 - 1).avgUtil : items.get(item1 - 1).maxUtil;
@@ -266,14 +259,13 @@ public class CHUI_PSO {
      * Verifies the closure of a particle
      *
      * @param p                   The particle
-     * @param shortestTransaction The ID of the shortest transaction the particle occur, Stored during fitness calc
      * @param tidSet              the TIDSET of the particle
      * @return True if Closed, false otherwise
      */
-    private boolean isClosed(Particle p, int shortestTransaction, BitSet tidSet) {
+    private boolean isClosed(Particle p, BitSet tidSet) {
         int support = tidSet.cardinality();
-        List<Pair> sTrans = database.get(shortestTransaction);
-        //Loop all items in the shortest transaction
+        List<Pair> sTrans = database.get(shortestTransactionID);
+        //Loop all items in the shortest transaction the particle occur
         for (Pair pair : sTrans) {
             //The item does not appear in the particle
             if (!p.X.get(pair.item)) {
@@ -300,9 +292,6 @@ public class CHUI_PSO {
     private int calcFitness(Particle p, BitSet tidSet, int idx) {
         int fitness = 0;
         int min = maxTransactionLength; //used to find the shortest transaction
-        if (tidSet == null) {
-            return 0; // particle does not occur in any transaction
-        }
 
         //The particle only contains 1 item, return the fitness calculated during pre-processing
         if (p.X.cardinality() == 1) {
@@ -325,7 +314,7 @@ public class CHUI_PSO {
             int q = 0; //current index in transaction
             int item = p.X.nextSetBit(0);
             if (database.get(i).size() < min) {
-                shortestTransactionID = i;
+                shortestTransactionID = i; //update shortest transaction id of particle
             }
             while (item != -1) {
                 if (database.get(i).get(q).item == item) {
@@ -347,9 +336,9 @@ public class CHUI_PSO {
 
 
     /**
-     * Updates population and checks for new CHUIs
+     * Updates population and evaluates the population
      */
-    private void update() { //TODO: Memory opt.
+    private void update() {
         List<Integer> diffList;
         for (int i = 0; i < pop_size; i++) {
             Particle p = population[i];
@@ -387,7 +376,7 @@ public class CHUI_PSO {
                     }
                     if (p.fitness >= minUtil) {
                         if (closed) {
-                            if (isClosed(p, shortestTransactionID, tidSet)) {
+                            if (isClosed(p, tidSet)) {
                                 //Particle is CHUI
                                 chuis.add(new Particle(p.X, p.fitness));
                             }
@@ -418,7 +407,7 @@ public class CHUI_PSO {
             for (int i = 0; i < num; i++) {
                 //position to change
                 int change = (int) (diffList.size() * Math.random());
-                //flip the bit of the selected item
+                //flip the bit of the selected item and remove it from difflist
                 population[pos].X.flip(diffList.get(change));
             }
         }
@@ -467,10 +456,10 @@ public class CHUI_PSO {
     }
 
     /**
-     * Select an item based on the Roulette wheel probabilities
+     * Select an element based on the given roulette wheel probabilities
      *
-     * @param probRange list of probability ranges for each item
-     * @return
+     * @param probRange list of roulette probabilities
+     * @return position of selected element in list
      */
     private int rouletteSelect(List<Double> probRange) {
         double rand = Math.random();
@@ -487,6 +476,10 @@ public class CHUI_PSO {
         return pos;
     }
 
+    /**
+     * creates roulette probabilities from current CHUIs
+     * @return list of probabilities for each CHUI
+     */
     private List<Double> rouletteProbChui() {
         double sum = 0;
         double tempSum = 0;
@@ -513,7 +506,7 @@ public class CHUI_PSO {
         List<List<Pair>> tempDb = new ArrayList<>();
         String currentLine;
         try (BufferedReader data = new BufferedReader(new InputStreamReader(
-                new FileInputStream(dataPath)))) {
+                new FileInputStream(input)))) {
             //1st DB-Scan: calculate TWU value for each item
             while ((currentLine = data.readLine()) != null) {
                 String[] split = currentLine.split(":");
@@ -567,7 +560,7 @@ public class CHUI_PSO {
      * @param db         The database to prune
      * @param transUtils The current transaction utilities of the database
      */
-    private void ETP(List<List<Pair>> db, List<Integer> transUtils) {//TODO: make iterative
+    private void ETP(List<List<Pair>> db, List<Integer> transUtils) {
         List<List<Pair>> revisedDB = new ArrayList<>();
         Map<Integer, Integer> itemTWU1 = new HashMap<>();
         boolean pruned = false;
@@ -648,6 +641,10 @@ public class CHUI_PSO {
     }
 
 
+    /**
+     * Writes results to file output file
+     * @throws IOException
+     */
     private void writeOut() throws IOException {
         StringBuilder sb = new StringBuilder();
         for (Particle p : chuis) {
@@ -659,40 +656,11 @@ public class CHUI_PSO {
             sb.append(p.fitness);
             sb.append(System.lineSeparator());
         }
-        BufferedWriter w = new BufferedWriter(new FileWriter(resultPath));
+        BufferedWriter w = new BufferedWriter(new FileWriter(output));
         w.write(sb.toString());
         w.newLine();
         w.close();
     }
-
-    /*
-    private void writeRes() throws IOException {
-        StringBuilder sb = new StringBuilder();
-        String p;
-        if (prune) {
-            p = "_PRUNE";
-        } else {
-            p = "_NOPRUNE";
-        }
-        for (int i = 0; i < it.size(); i++) {
-            sb.append(it.get(i));
-            sb.append(",");
-            sb.append(pat.get(i));
-            sb.append(System.lineSeparator());
-        }
-        BufferedWriter w = new BufferedWriter(new FileWriter(convPath + "convergence" + p + ".csv"));
-        w.write(sb.toString());
-        w.newLine();
-        w.close();
-
-        sb = new StringBuilder();
-        sb.append(minUtil + "," + (minUtil * 1.0 / totalUtil) + "," + chuis.size() + "," + (endTimestamp - startTimestamp) + "," + (int) maxMemory);
-        BufferedWriter s = new BufferedWriter(new FileWriter(convPath + "log_" + p + ".csv", true));
-        s.write(sb.toString());
-        s.newLine();
-        s.close();
-    }
-     */
 
     /**
      * Print statistics about the latest execution to System.out.
@@ -708,6 +676,9 @@ public class CHUI_PSO {
                 .println("===================================================");
     }
 
+    /**
+     * check current memory usage
+     */
     private void checkMemory() {
         double currentMemory = (Runtime.getRuntime().totalMemory() - Runtime
                 .getRuntime().freeMemory()) / 1024d / 1024d;
