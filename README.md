@@ -8,6 +8,6 @@ How to run:
 * Set the "output" variable to any .txt file path. The discovered patterns are written to this file during execution.
 * Run main.java
 
-The minimum utility threshold, population size, and number of iterations can be changed in CHUI_PSO.java.
+The minimum utility threshold, population size, and number of iterations can be set in CHUI_PSO.java.
 
-Note that the algorithm can discover high-utility itemsets by changing the variable "closed" to False in CHUI_PSO.java
+The algorithm can also discover high-utility itemsets by changing the variable "closed" to False in CHUI_PSO.java
