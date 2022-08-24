@@ -607,8 +607,8 @@ public class CHUI_PSO {
      */
     private void optimizeTransactions(List<List<Pair>> db, Map<Integer, Integer> itemTWU1) {
         HashMap<Integer, Integer> itemNames = new HashMap<>();
-        int c = 0; //new item name
-        int transID = 0; //current TID
+        int name = 0; //new item name
+        int transID = 0; //current TID in revised db
         for (int i = 0; i < db.size(); i++) {
             if (db.get(i).isEmpty()) {
                 continue;
@@ -618,10 +618,10 @@ public class CHUI_PSO {
                 int utility = db.get(i).get(j).utility;
                 if (!itemNames.containsKey(item)) {
                     //item has not been given new name yet
-                    c++; //increment name
-                    itemNames.put(item, c); //set name for this item
-                    itemNamesRev.put(c, item); //save the old name so it can be retrieved later
-                    Item itemClass = new Item(c); //this class stores different info for the item
+                    name++; //increment name
+                    itemNames.put(item, name); //set name for this item
+                    itemNamesRev.put(name, item); //save the old name so it can be retrieved later
+                    Item itemClass = new Item(name); //this class stores different info for the item
                     items.add(itemClass);
                 }
                 int twu = itemTWU1.get(item); //get the twu of this item
@@ -636,7 +636,7 @@ public class CHUI_PSO {
             Collections.sort(db.get(i)); //sort transaction according to item name
             maxTransactionLength = Math.max(maxTransactionLength, db.get(i).size()); //update max trans. length
             database.add(db.get(i)); //store the transaction
-            transID++;
+            transID++; //increment transaction id
         }
     }
 
