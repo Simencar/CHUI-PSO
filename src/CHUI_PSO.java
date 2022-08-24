@@ -114,7 +114,7 @@ public class CHUI_PSO {
         //utilities used after each population update
         List<Double> probChui = new ArrayList<>(); //roulette probabilities for current discovered CHUIs
         int nPatterns = 0; // number of CHUIs discovered last iteration
-        int pos = 0; //position of gBest in percentChui
+        int pos = 0; //position of gBest in probChui
         int lastImproved = 0; //the number of iterations since a CHUI was discovered
         boolean roulette = true; // roulette wheel selection
 
