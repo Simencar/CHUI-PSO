@@ -23,14 +23,13 @@ public class CHUI_PSO {
 
 
     //file paths
-    final String dataset = "retail";
-    final String input = "D:\\Documents\\Skole\\Master\\Work\\" + dataset + ".txt"; //input file path
+    final String input = "D:\\Documents\\Skole\\Master\\Work\\chess.txt"; //input file path
     final String output = "D:\\Documents\\Skole\\Master\\Work\\out.txt"; //output file path
 
     //Algorithm parameters
     final int pop_size = 20; // the size of the population
     final int iterations = 10000; // the number of iterations before termination
-    final int minUtil = 5000; // minimum utility threshold
+    final int minUtil = 600000; // minimum utility threshold
     final boolean closed = true; //true = find CHUIS, false = find HUIS
     final boolean prune = true; //true = ETP, false = traditional TWU-Model
 
