@@ -22,15 +22,15 @@ public class CHUI_PSO {
 
 
     //file paths
-    final String input = "D:\\Documents\\Skole\\Master\\Work\\kosarak.txt"; //input file path
+    final String input = "D:\\Documents\\Skole\\Master\\Work\\chess.txt"; //input file path
     final String output = "D:\\Documents\\Skole\\Master\\Work\\out.txt"; //output file path
 
     //Algorithm parameters
     final int pop_size = 20; // the size of the population
     final int iterations = 10000; // the number of iterations before termination
-    final int minUtil = 2000000; // minimum utility threshold
-    final boolean closed = true; //true = find CHUIS, false = find HUIS
-    final boolean prune = true; //true = ETP, false = traditional TWU-Model
+    final int minUtil = 500000; // minimum utility threshold
+    final boolean closed = false; //true = find CHUIS, false = find HUIS
+    final boolean ETP = true; //true = ETP, false = TWU-Model
 
     //stats
     double maxMemory = 0; // the maximum memory usage
@@ -224,7 +224,7 @@ public class CHUI_PSO {
 
     /**
      * The pev-check verifies that the particle exists in the database and modifies it if not.
-     * Furthermore, it calculates the avg/max fitness estimate and returns the TidSet of the particle.
+     * It also calculates the avg/max fitness estimate and returns the TidSet of the particle.
      *
      * @param p The particle
      * @return tidSet: The transactions the itemset of the particle occur
@@ -493,8 +493,7 @@ public class CHUI_PSO {
     private void readData() {
         Map<Integer, Integer> itemTWU1 = new HashMap<>(); //holds current TWU-value for each item
         List<Integer> transUtils = new ArrayList<>(); //holds TU-value for each transaction
-        List<List<Pair>> db = new ArrayList<>();
-        List<List<Pair>> tempDb = new ArrayList<>();
+        List<List<Pair>> db = new ArrayList<>(); //the database
         String currentLine;
         try (BufferedReader data = new BufferedReader(new InputStreamReader(
                 new FileInputStream(input)))) {
@@ -516,17 +515,17 @@ public class CHUI_PSO {
                     twu = (twu == null) ? transactionUtility : twu + transactionUtility;
                     itemTWU1.put(item, twu);
                 }
-                tempDb.add(transaction);
+                db.add(transaction);
             }
         } catch (Exception e) {
             // catches exception if error while reading the input file
             e.printStackTrace();
         }
         //2nd DB-scan: remove items with TWU < minUtil
-        for (int i = 0; i < tempDb.size(); i++) {
+        for (int i = 0; i < db.size(); i++) {
             List<Pair> revisedTransaction = new ArrayList<>();
-            for (int j = 0; j < tempDb.get(i).size(); j++) {
-                Pair pair = tempDb.get(i).get(j);
+            for (int j = 0; j < db.get(i).size(); j++) {
+                Pair pair = db.get(i).get(j);
                 if (itemTWU1.get(pair.item) >= minUtil) {
                     revisedTransaction.add(pair);
                 } else {
@@ -535,9 +534,9 @@ public class CHUI_PSO {
                     transUtils.set(i, TU); //update transaction utility since item is removed
                 }
             }
-            db.add(revisedTransaction); //store revised transaction
+            db.set(i, revisedTransaction);
         }
-        if (prune) {
+        if (ETP) {
             ETP(db, transUtils); //Use additional pruning with ETP
         } else {
             optimizeTransactions(db, itemTWU1);
@@ -578,7 +577,6 @@ public class CHUI_PSO {
                     transUtils.set(i, TU); //update transaction utility
                 }
             }
-            //revisedDB.add(revisedTransaction); //store the revised transaction
             db.set(i, revisedTransaction);
         }
         if (pruned) { //item was removed, repeat pruning
@@ -606,22 +604,21 @@ public class CHUI_PSO {
             for (int j = 0; j < db.get(i).size(); j++) {
                 int item = db.get(i).get(j).item;
                 int utility = db.get(i).get(j).utility;
-                if (!itemNames.containsKey(item)) {
-                    //item has not been given new name yet
+                if (!itemNames.containsKey(item)) { //item has not been given new name yet
                     name++; //increment name
                     itemNames.put(item, name); //set name for this item
                     itemNamesRev.put(name, item); //save the old name so it can be retrieved later
                     Item itemClass = new Item(name); //this class stores different info for the item
                     items.add(itemClass);
+                    int twu = itemTWU1.get(item); //get the twu of this item
+                    itemTWU.put(name, twu); //store twu value
                 }
-                int twu = itemTWU1.get(item); //get the twu of this item
                 item = itemNames.get(item); //get the name of the item
                 db.get(i).get(j).item = item; //change the name of the item
                 Item it = items.get(item - 1);
-                it.TIDS.set(transID); //update the transaction bit for the item
-                itemTWU.put(item, twu); //store twu value
-                it.totalUtil += utility; //update total utility of this item
-                it.maxUtil = (it.maxUtil == 0) ? utility : Math.max(it.maxUtil, utility); //update max utility
+                it.TIDS.set(transID); //update the item's tidset
+                it.totalUtil += utility; //update utility of item
+                it.maxUtil = Math.max(it.maxUtil, utility); //update max utility
             }
             Collections.sort(db.get(i)); //sort transaction according to item name
             maxTransactionLength = Math.max(maxTransactionLength, db.get(i).size()); //update max trans. length
