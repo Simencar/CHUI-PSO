@@ -22,13 +22,13 @@ public class CHUI_PSO {
 
 
     //file paths
-    final String input = "D:\\Documents\\Skole\\Master\\Work\\chainstore.txt"; //input file path
+    final String input = "D:\\Documents\\Skole\\Master\\Work\\kosarak.txt"; //input file path
     final String output = "D:\\Documents\\Skole\\Master\\Work\\out.txt"; //output file path
 
     //Algorithm parameters
     final int pop_size = 20; // the size of the population
     final int iterations = 10000; // the number of iterations before termination
-    final int minUtil = 1000000; // minimum utility threshold
+    final int minUtil = 2000000; // minimum utility threshold
     final boolean closed = true; //true = find CHUIS, false = find HUIS
     final boolean prune = true; //true = ETP, false = traditional TWU-Model
 
@@ -400,7 +400,7 @@ public class CHUI_PSO {
                 //position to change
                 int change = (int) (diffList.size() * Math.random());
                 //flip the bit of the selected item and remove it from difflist
-                population[pos].X.flip(diffList.get(change));
+                population[pos].X.flip(diffList.remove(change));
             }
         }
     }
@@ -551,7 +551,6 @@ public class CHUI_PSO {
      * @param transUtils The current transaction utilities of the database
      */
     private void ETP(List<List<Pair>> db, List<Integer> transUtils) {
-        List<List<Pair>> revisedDB = new ArrayList<>();
         Map<Integer, Integer> itemTWU1 = new HashMap<>();
         boolean pruned = false;
         //calculate TWU of each item
@@ -579,12 +578,13 @@ public class CHUI_PSO {
                     transUtils.set(i, TU); //update transaction utility
                 }
             }
-            revisedDB.add(revisedTransaction); //store the revised transaction
+            //revisedDB.add(revisedTransaction); //store the revised transaction
+            db.set(i, revisedTransaction);
         }
         if (pruned) { //item was removed, repeat pruning
-            ETP(revisedDB, transUtils);
+            ETP(db, transUtils);
         } else { //pruning is finished, optimize DB
-            optimizeTransactions(revisedDB, itemTWU1);
+            optimizeTransactions(db, itemTWU1);
         }
     }
 
