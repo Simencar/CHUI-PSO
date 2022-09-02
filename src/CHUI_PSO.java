@@ -22,13 +22,13 @@ public class CHUI_PSO {
 
 
     //file paths
-    final String input = "D:\\Documents\\Skole\\Master\\Work\\kosarak.txt"; //input file path
+    final String input = "D:\\Documents\\Skole\\Master\\Work\\chainstore.txt"; //input file path
     final String output = "D:\\Documents\\Skole\\Master\\Work\\out.txt"; //output file path
 
     //Algorithm parameters
     final int pop_size = 20; // the size of the population
     final int iterations = 10000; // the number of iterations before termination
-    final int minUtil = 6000000; // minimum utility threshold
+    final int minUtil = 1000000; // minimum utility threshold
     final boolean closed = true; //true = find CHUIS, false = find HUIS
     final boolean prune = true; //true = ETP, false = traditional TWU-Model
 
@@ -160,6 +160,7 @@ public class CHUI_PSO {
                 if (i % 100 == 0 && highEst > 0 && i > 0) { //check each 100th iteration
                     //Tighten std if mostly overestimates are made (only relevant when avgEstimates is active)
                     std = ((double) lowEst / highEst < 0.01) ? 1 : std;
+                    System.out.println(i);
                 }
                 nPatterns = chuis.size();
             }
@@ -226,26 +227,25 @@ public class CHUI_PSO {
      * Furthermore, it calculates the avg/max fitness estimate and returns the TidSet of the particle.
      *
      * @param p The particle
-     * @return orgBitSet: The transactions the itemset of the particle occur (TidSet)
+     * @return tidSet: The transactions the itemset of the particle occur
      */
     private BitSet pev_check(Particle p) {
-        int item1 = p.X.nextSetBit(0);
-        BitSet orgBitSet = (BitSet) items.get(item1 - 1).TIDS.clone();
-        BitSet copyBitSet = (BitSet) orgBitSet.clone();
-        p.estFitness = avgEstimate ? items.get(item1 - 1).avgUtil : items.get(item1 - 1).maxUtil;
-        for (int i = p.X.nextSetBit(item1 + 1); i != -1; i = p.X.nextSetBit(i + 1)) {
-            orgBitSet.and(items.get(i - 1).TIDS);
-            //the two items have common transactions
-            if (orgBitSet.cardinality() > 0) {
-                copyBitSet = (BitSet) orgBitSet.clone();
+        int item = p.X.nextSetBit(0);
+        p.estFitness = avgEstimate ? items.get(item - 1).avgUtil : items.get(item - 1).maxUtil;
+        if (p.X.cardinality() == 1) {
+            return items.get(item - 1).TIDS; //avoids bitset clone for 1-itemsets
+        }
+        BitSet tidSet = (BitSet) items.get(item - 1).TIDS.clone(); //initial tidSet
+        for (int i = p.X.nextSetBit(item + 1); i != -1; i = p.X.nextSetBit(i + 1)) {
+            if (tidSet.intersects(items.get(i - 1).TIDS)) { //the item has common transactions with current tidSet
+                tidSet.and(items.get(i - 1).TIDS); //update tidSet
+                //append avg- or max util of the item to the fitness estimate
                 p.estFitness += avgEstimate ? (items.get(i - 1).avgUtil) : (items.get(i - 1).maxUtil);
             } else {
-                // no common transactions, remove the current item from the particle
-                orgBitSet = (BitSet) copyBitSet.clone();
-                p.X.clear(i);
+                p.X.clear(i); // no common transactions, remove the item from the particle
             }
         }
-        return orgBitSet;
+        return tidSet; //the tidSet of the pev-checked particle
     }
 
     /**
@@ -350,7 +350,6 @@ public class CHUI_PSO {
                 int change = items.get(rand).item;
                 p.X.flip(change);
             }
-
             //avoid PEV-check and fit. calc. if particle is already explored
             if (!explored.contains(p.X)) {
                 //bitset before pev
