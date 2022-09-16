@@ -22,21 +22,20 @@ public class CHUI_PSO {
 
 
     //file paths
-    final String input = "D:\\Documents\\Skole\\Master\\Work\\chess.txt"; //input file path
+    final String input = "D:\\Documents\\Skole\\Master\\Work\\kosarak.txt"; //input file path
     final String output = "D:\\Documents\\Skole\\Master\\Work\\out.txt"; //output file path
 
     //Algorithm parameters
     final int pop_size = 20; // the size of the population
     final int iterations = 10000; // the number of iterations before termination
-    final int minUtil = 500000; // minimum utility threshold
-    final boolean closed = false; //true = find CHUIS, false = find HUIS
+    final int minUtil = 2000000; // minimum utility threshold
+    final boolean closed = true; //true = find CHUIS, false = find HUIS
     final boolean ETP = true; //true = ETP, false = TWU-Model
 
     //stats
     double maxMemory = 0; // the maximum memory usage
     long startTimestamp = 0; // the time the algorithm started
     long endTimestamp = 0; // the time the algorithm terminated
-    long totalUtil = 0; // the total utility in the DB
 
 
     // this class represent an item and its utility in a transaction
@@ -103,7 +102,7 @@ public class CHUI_PSO {
 
         readData(); //reads input file and prunes DB
         checkMemory();
-
+        System.out.println("items: "+items.size());
         //utilities used after each population update
         List<Double> probChui = new ArrayList<>(); //roulette probabilities for current discovered CHUIs
         int nPatterns = 0; // number of CHUIs discovered last iteration
@@ -492,50 +491,56 @@ public class CHUI_PSO {
      */
     private void readData() {
         Map<Integer, Integer> itemTWU1 = new HashMap<>(); //holds current TWU-value for each item
-        List<Integer> transUtils = new ArrayList<>(); //holds TU-value for each transaction
-        List<List<Pair>> db = new ArrayList<>(); //the database
         String currentLine;
+        //1st DB-Scan: calculate TWU value for each item
         try (BufferedReader data = new BufferedReader(new InputStreamReader(
                 new FileInputStream(input)))) {
-            //1st DB-Scan: calculate TWU value for each item
+            while ((currentLine = data.readLine()) != null) {
+                String[] split = currentLine.split(":");
+                String[] items = split[0].split(" ");
+                int transactionUtility = Integer.parseInt(split[1]);
+                for (int i = 0; i < items.length; i++) {
+                    int item = Integer.parseInt(items[i]);
+                    Integer twu = itemTWU1.get(item);
+                    twu = (twu == null) ? transactionUtility : twu + transactionUtility;
+                    itemTWU1.put(item, twu);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        //2nd DB-Scan: prune
+        List<Integer> transUtils = new ArrayList<>(); //holds TU of each transaction
+        List<List<Pair>> db = new ArrayList<>(); //the database
+        try (BufferedReader data = new BufferedReader(new InputStreamReader(
+                new FileInputStream(input)))) {
             while ((currentLine = data.readLine()) != null) {
                 String[] split = currentLine.split(":");
                 String[] items = split[0].split(" ");
                 String[] utilities = split[2].split(" ");
                 int transactionUtility = Integer.parseInt(split[1]);
-                totalUtil += transactionUtility;
-                transUtils.add(transactionUtility);
                 List<Pair> transaction = new ArrayList<>();
                 for (int i = 0; i < items.length; i++) {
                     int item = Integer.parseInt(items[i]);
                     int util = Integer.parseInt(utilities[i]);
-                    Pair pair = new Pair(item, util);
-                    transaction.add(pair);
-                    Integer twu = itemTWU1.get(item);
-                    twu = (twu == null) ? transactionUtility : twu + transactionUtility;
-                    itemTWU1.put(item, twu);
+                    if (itemTWU1.get(item) >= minUtil) {
+                        Pair pair = new Pair(item, util);
+                        transaction.add(pair);
+                    }
+                    else {
+                        transactionUtility -= util;
+                    }
                 }
-                db.add(transaction);
+                if (!transaction.isEmpty()) {
+                    db.add(transaction);
+                    transUtils.add(transactionUtility);
+                }
             }
         } catch (Exception e) {
-            // catches exception if error while reading the input file
             e.printStackTrace();
         }
-        //2nd DB-scan: remove items with TWU < minUtil
-        for (int i = 0; i < db.size(); i++) {
-            List<Pair> revisedTransaction = new ArrayList<>();
-            for (int j = 0; j < db.get(i).size(); j++) {
-                Pair pair = db.get(i).get(j);
-                if (itemTWU1.get(pair.item) >= minUtil) {
-                    revisedTransaction.add(pair);
-                } else {
-                    int TU = transUtils.get(i);
-                    TU -= pair.utility;
-                    transUtils.set(i, TU); //update transaction utility since item is removed
-                }
-            }
-            db.set(i, revisedTransaction);
-        }
+
         if (ETP) {
             ETP(db, transUtils); //Use additional pruning with ETP
         } else {
@@ -585,6 +590,7 @@ public class CHUI_PSO {
             optimizeTransactions(db, itemTWU1);
         }
     }
+
 
     /**
      * Sets item-names in the range 1 - #1-HTWUI, removes empty transactions,
