@@ -103,7 +103,7 @@ public class CHUI_PSO {
         readData(); //reads input file and prunes DB
         checkMemory();
         System.out.println("items: "+items.size());
-        //utilities used after each population update
+
         List<Double> probChui = new ArrayList<>(); //roulette probabilities for current discovered CHUIs
         int nPatterns = 0; // number of CHUIs discovered last iteration
         int pos = 0; //position of gBest in probChui
@@ -116,8 +116,8 @@ public class CHUI_PSO {
             item.avgUtil = 1 + (item.totalUtil / item.TIDS.cardinality());
             std += item.maxUtil - item.avgUtil;
         }
-
         explored.add(new BitSet(items.size())); //avoids edge-case for empty particle
+
         if (!items.isEmpty()) {
             std = std / items.size(); //find mean deviation
             //only use avgEstimates if the standard deviation is small compared to the minUtil
@@ -142,7 +142,7 @@ public class CHUI_PSO {
                         }
                         pos = rouletteSelect(probChui); //select gBest with RWS
                     }
-                    //SELECT GBEST AS NEXT CHUI IN 'chuis'
+                    //select gBest by iterating discovered CHUI set
                     else {
                         if (nPatterns == chuis.size()) { //only change gBest if no CHUIs discovered last iteration
                             if (pos < chuis.size() - 1) {
@@ -259,13 +259,12 @@ public class CHUI_PSO {
         List<Pair> sTrans = database.get(shortestTransactionID);
         //Loop all items in the shortest transaction the particle occur
         for (Pair pair : sTrans) {
-            //The item does not appear in the particle
-            if (!p.X.get(pair.item)) {
+            if (!p.X.get(pair.item)) { //The item does not appear in the particle
                 BitSet currentTids = (BitSet) tidSet.clone();
                 BitSet newItem = (BitSet) items.get(pair.item - 1).TIDS.clone();
                 currentTids.and(newItem);
-                //The support of the particle is the same with the new item appended -> The particle is not closed
                 if (currentTids.cardinality() == support) {
+                    //The support of the particle is the same with the new item appended -> The particle is not closed
                     return false;
                 }
             }
@@ -341,7 +340,6 @@ public class CHUI_PSO {
             //repeat for gBest
             diffList = bitDiff(gBest, p);
             changeParticle(diffList, i);
-
 
             if (explored.contains(p.X)) {
                 //the particle is already explored, change one random bit
