@@ -2,8 +2,9 @@
 import java.io.*;
 import java.util.*;
 
+//@author Simen Carstensen
 public class CHUI_PSO {
-
+    //DO NOT CHANGE!
     private Map<Integer, Integer> itemTWU = new HashMap<>(); //map of item TWUs
     private List<List<Pair>> database = new ArrayList<>(); //the pruned database
     private Particle gBest; //global fittest particle
@@ -22,14 +23,14 @@ public class CHUI_PSO {
 
 
     //file paths
-    final String input = "D:\\Documents\\Skole\\Master\\Work\\kosarak.txt"; //input file path
+    final String input = "D:\\Documents\\Skole\\Master\\Work\\chess.txt"; //input file path
     final String output = "D:\\Documents\\Skole\\Master\\Work\\out.txt"; //output file path
 
     //Algorithm parameters
     final int pop_size = 20; // the size of the population
     final int iterations = 10000; // the number of iterations before termination
-    final int minUtil = 2000000; // minimum utility threshold
-    final boolean closed = true; //true = find CHUIS, false = find HUIS
+    final int minUtil = 550000; // minimum utility threshold
+    final boolean closed = true; //true = find CHUIs, false = find HUIs
     final boolean ETP = true; //true = ETP, false = TWU-Model
 
     //stats
@@ -102,7 +103,7 @@ public class CHUI_PSO {
 
         readData(); //reads input file and prunes DB
         checkMemory();
-        System.out.println("items: "+items.size());
+        System.out.println("items: " + items.size());
 
         List<Double> probChui = new ArrayList<>(); //roulette probabilities for current discovered CHUIs
         int nPatterns = 0; // number of CHUIs discovered last iteration
@@ -525,8 +526,7 @@ public class CHUI_PSO {
                     if (itemTWU1.get(item) >= minUtil) {
                         Pair pair = new Pair(item, util);
                         transaction.add(pair);
-                    }
-                    else {
+                    } else {
                         transactionUtility -= util;
                     }
                 }
