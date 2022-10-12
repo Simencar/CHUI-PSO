@@ -1,6 +1,6 @@
 # CHUI-PSO
 
-This is a repository for CHUI-PSO, a Particle swarm optimization algorithm for mining closed high-utility itemsets
+This is a repository for CHUI-PSO, a _particle swarm optimization_ algorithm for _closed high-utility itemset mining_ in quantitative transactional data.
 
 How to run:
 
